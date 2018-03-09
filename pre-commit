@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -e
+
+go test .
+./gml .
+
+echo Build succeeds.
+exit 0
