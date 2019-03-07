@@ -32,7 +32,7 @@ func TestJSONProtocolHappyPath(t *testing.T) {
 	rw := &ReadWriter{in, &out}
 
 	protocol := &Definition{}
-	_ = protocol.Register(&TestMessage{})
+	protocol.Register(&TestMessage{})
 	sp := protocol.Wrap(rw)
 
 	// verify that we can read the incoming messages
@@ -94,28 +94,9 @@ func TestCoverage(t *testing.T) {
 	_ = ErrJSONTooLarge{1, 1}.Error()
 }
 
-func TestRegistrationErrors(t *testing.T) {
-	sp := &Definition{}
-	_ = sp.Register(&TestMessage{})
-	err := sp.Register(&TestMessage{})
-
-	if err != ErrTypeAlreadyRegistered {
-		t.Fatal("ErrTypeAlreadyRegistered isn't working.")
-	}
-
-	// especially useful to check the off-by-one here.
-	msg := &GenericMessage{strings.Repeat("a", 256)}
-	err = sp.Register(msg)
-	if err != ErrTypeTooLong {
-		t.Fatal("Detection of type being too long not working")
-	}
-}
-
 func TestBadSends(t *testing.T) {
 	sp := &Definition{}
-	_ = sp.Register(&TestMessage{})
-	_ = sp.Register(&BadJSON{})
-	_ = sp.Register(&StringMessage{})
+	sp.Register(&TestMessage{}, &BadJSON{}, &StringMessage{})
 
 	badWriterErr := errors.New("bad writer strikes again")
 	bw := &BadWriter{0, badWriterErr}
@@ -164,7 +145,7 @@ func TestOtherErrors(t *testing.T) {
 	rw := &RWWithClose{in, out}
 
 	protocol := &Definition{}
-	_ = protocol.Register(&TestMessage{})
+	protocol.Register(&TestMessage{})
 
 	sp := protocol.Wrap(rw)
 
@@ -204,7 +185,7 @@ func TestReadErrors(t *testing.T) {
 	// are handled properly in the reading code
 
 	protocol := &Definition{}
-	_ = protocol.Register(&TestMessage{})
+	protocol.Register(&TestMessage{})
 
 	for idx, in := range []io.Reader{
 		bytes.NewBuffer([]byte{}),
@@ -300,18 +281,6 @@ func (sm *StringMessage) SijsopType() string {
 
 func (sm *StringMessage) New() Message {
 	return &StringMessage{}
-}
-
-type GenericMessage struct {
-	Type string
-}
-
-func (gm *GenericMessage) SijsopType() string {
-	return gm.Type
-}
-
-func (gm *GenericMessage) New() Message {
-	return &GenericMessage{gm.Type}
 }
 
 type BadWriter struct {

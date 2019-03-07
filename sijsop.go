@@ -18,7 +18,7 @@ Usage In Go
 
 This protocol is defined in terms of messages, which must implement
 sijsop.Message. This involves writing two static class methods, one
-which declares a <256 byte string which uniquely identifies this
+which declares a string which uniquely identifies this
 type for a given Definition, and one which simply returns a new instance
 of the given type. These must be defined on the pointer receiver for the
 type, because we must be able to modify the values for this code to work.
@@ -87,26 +87,15 @@ type Definition struct {
 //
 // The last registration for a given .SijsopType() will be the one that is
 // used.
-func (d *Definition) Register(types ...Message) error {
+func (d *Definition) Register(types ...Message) {
 	if d.types == nil {
 		d.types = map[string]Message{}
 	}
 
 	for _, t := range types {
 		ty := t.SijsopType()
-
-		_, alreadyRegistered := d.types[ty]
-		if alreadyRegistered {
-			return ErrTypeAlreadyRegistered
-		}
-
-		if len(ty) > 255 {
-			return ErrTypeTooLong
-		}
 		d.types[ty] = t
 	}
-
-	return nil
 }
 
 // Wrap creates a new Handler around the given io.ReadWriter that
@@ -169,17 +158,21 @@ type Handler struct {
 // unmarshaling. It MUST be the same as what is called, or sijsop does not
 // guarantee correct functioning.
 type Message interface {
-	// This will cause errors if it exceeds 255 bytes.
 	SijsopType() string
 
 	// Returns a new zero instance of the struct in question.
 	New() Message
 }
 
-// Send sends the given JSON message. If multiple messages
-// are sent, they will be efficiently concatenated together with a buffer.
+// Send sends the given JSON message.
 //
-// If an error is returned, the stream is now in an unknown condition.
+// This method uses a buffer to generate the message. If you are sending
+// multiple messages, it is somewhat more efficient to send them all as
+// parameters to one Send call, so the same buffer can be used for all of
+// them.
+//
+// If an error is returned, the stream is now in an unknown condition and
+// can not be trusted for further use.
 func (w *Writer) Send(msgs ...Message) error {
 	if w.closed {
 		return ErrClosed

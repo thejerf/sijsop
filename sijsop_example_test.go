@@ -46,7 +46,7 @@ func Example() {
 	toLeftRead, fromRightWrite := io.Pipe()
 
 	protocol := &Definition{}
-	_ = protocol.Register(&FileTransfer{}, &FileTransferAck{})
+	protocol.Register(&FileTransfer{}, &FileTransferAck{})
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)

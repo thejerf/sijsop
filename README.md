@@ -23,6 +23,11 @@ signed.)
 Changlog
 --------
 
+1. 1.0.1
+  * Finish removing the restrictions around a 255-char limit on types.
+    I mean, in my opinion you shouldn't have types that long, but there's
+    no reason to limit you.
+  * Remove the error return from Register for documentation simplicity.
 2. 1.0.0
   * [Per ESR](http://esr.ibiblio.org/?p=8254#comment-2202065), this changes
     the protocol to pure text. This is API compatible with 0.9.0, but
