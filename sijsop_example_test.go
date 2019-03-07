@@ -46,7 +46,7 @@ func Example() {
 	toLeftRead, fromRightWrite := io.Pipe()
 
 	protocol := &Definition{}
-	protocol.Register(&FileTransfer{}, &FileTransferAck{})
+	_ = protocol.Register(&FileTransfer{}, &FileTransferAck{})
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -76,7 +76,7 @@ func Example() {
 		}
 
 		// now we copy the file over the stream directly
-		io.Copy(fromLeftWrite, f)
+		_, _ = io.Copy(fromLeftWrite, f)
 
 		ack := &FileTransferAck{}
 		err = sp.Unmarshal(ack)
@@ -103,7 +103,7 @@ func Example() {
 		// Now directly extract the file from the bytestream
 		r := &io.LimitedReader{toRightRead, size}
 		buf := &bytes.Buffer{}
-		io.Copy(buf, r)
+		_, _ = io.Copy(buf, r)
 
 		// and send the ack, transititioning back to JSON
 		err = sp.Send(&FileTransferAck{msg.(*FileTransfer).Name})

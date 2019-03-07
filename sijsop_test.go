@@ -18,18 +18,21 @@ func TestJSONProtocolHappyPath(t *testing.T) {
 	// "in" from the point of view of the JSON protocol
 
 	incoming := []byte{
-		1,           // the type is one byte
-		65,          // which is capital A,
-		0, 0, 0, 13, //payload is 13 bytes
+		// the type is one byte
+		'1', 10,
+		// which is capital A,
+		'A', 10,
+		'1', '3', 10, //payload is 13 bytes
 	}
 	inJSON := `{"a":1,"b":2}`
 	incoming = append(incoming, []byte(inJSON)...)
+	incoming = append(incoming, 10)
 	in := bytes.NewBuffer(incoming)
 	var out bytes.Buffer
 	rw := &ReadWriter{in, &out}
 
 	protocol := &Definition{}
-	protocol.Register(&TestMessage{})
+	_ = protocol.Register(&TestMessage{})
 	sp := protocol.Wrap(rw)
 
 	// verify that we can read the incoming messages
@@ -73,8 +76,12 @@ func TestJSONProtocolHappyPath(t *testing.T) {
 
 	_ = sp.Send(target)
 	if !reflect.DeepEqual(out.Bytes(),
-		[]byte{1, 65, 0, 0, 0, 13, 123, 34, 97, 34, 58, 49, 44, 34, 98, 34,
-			58, 50, 125}) {
+		[]byte{
+			'1', 10,
+			'A', 10,
+			'1', '3', 10,
+			123, 34, 97, 34, 58, 49, 44, 34, 98, 34, 58, 50, 125, 10,
+		}) {
 		t.Fatal("Does not send the correct data values")
 	}
 }
@@ -84,7 +91,7 @@ func TestCoverage(t *testing.T) {
 	// the coverage chart
 	_ = ErrWrongType{"A", "B"}.Error()
 	_ = ErrUnknownType{"A"}.Error()
-	_ = ErrJSONTooLarge{1}.Error()
+	_ = ErrJSONTooLarge{1, 1}.Error()
 }
 
 func TestRegistrationErrors(t *testing.T) {
@@ -142,15 +149,13 @@ func TestBadSends(t *testing.T) {
 	}
 
 	// check the thresholding
-	oldThreshold := threshold
-	threshold = 4
 	buf = &bytes.Buffer{}
 	writer = sp.Writer(buf)
+	writer.SizeLimit = 4
 	err = writer.Send(&TestMessage{})
-	if !reflect.DeepEqual(ErrJSONTooLarge{13}, err) {
+	if !reflect.DeepEqual(ErrJSONTooLarge{13, 4}, err) {
 		t.Fatal("Threshold detection doesn't work")
 	}
-	threshold = oldThreshold
 }
 
 func TestOtherErrors(t *testing.T) {
@@ -199,7 +204,7 @@ func TestReadErrors(t *testing.T) {
 	// are handled properly in the reading code
 
 	protocol := &Definition{}
-	protocol.Register(&TestMessage{})
+	_ = protocol.Register(&TestMessage{})
 
 	for idx, in := range []io.Reader{
 		bytes.NewBuffer([]byte{}),
@@ -226,9 +231,11 @@ func TestReadErrors(t *testing.T) {
 		}
 	}
 
-	in := bytes.NewBuffer(
-		append([]byte{1, 65, 0, 0, 0, 13}, []byte(`{"a":1,"b":2}`)...),
-	)
+	readMsg := append([]byte{'1', 10, 'A', 10, '1', '3', 10},
+		[]byte(`{"a":1,"b":2}`)...)
+	readMsg = append(readMsg, 10)
+	in := bytes.NewBuffer(readMsg)
+
 	r := protocol.Reader(in)
 	// wrong type
 	sm := &StringMessage{}

@@ -35,11 +35,13 @@ func (eut ErrUnknownType) Error() string {
 // ErrJSONTooLarge is returned when the encoded JSON of a message is above
 // the legal threshold.
 type ErrJSONTooLarge struct {
-	Size int
+	Size  int
+	Limit int
 }
 
 func (ejtl ErrJSONTooLarge) Error() string {
-	return fmt.Sprintf("incoming JSON packet too large: %d", ejtl.Size)
+	return fmt.Sprintf("incoming JSON packet too large: %d of max %d",
+		ejtl.Size, ejtl.Limit)
 }
 
 // ErrNoUnmarshalTarget is returned when you attempt to Unmarshal(nil).

@@ -38,25 +38,20 @@ The Wire Protocol
 
 The protocol is a message-based protocol which works as follows:
 
- * 1 byte sent indicating the length of the next string.
+ * An ASCII number ("1", "342", etc.), followed by a newline (byte 10).
  * That many bytes of arbitrary string indicating the type of the next
-   message, the "type tag".
- * 4 bytes indicating the length of JSON.
- * That much JSON.
+   message, the "type tag", followed by a newline. (The newline is
+   NOT included in the first number.)
+ * An ASCII number ("1", "342", etc.), followed by a newline (byte 10).
+ * That much JSON, followed by a newline. (Again, the newline is
+   NOT included in the length count, but it must be present.)
 
-The size of the JSON is limited in this implementation to 2**30 bytes,
-as a sanity check, because outbound JSON is fully manifested in memory
-before it is sent out (the only way to get the size in advance). If
-you find yourself doing that something probably went wrong several factors
-of 2 ago.
-
-Commentary: I've also often used a protocol that is just the last two
-lines, but when using static languages (not just Go), I have found it
-is helpful to be able to pick the type out in advance of the JSON parsing.
-Otherwise you end up double-parsing the JSON or something equally
-exotic and inefficient, looking for the type then doing the unmarshal.
-Sending the type separately first makes this work much better, and
-dynamic languages may simply ignore it entirely if they like.
+Commentary: I've often used variants of this protocol that used just the
+JSON portion, but I found myself repeatedly having to parse the JSON
+once for the type, and then again with the right type. Giving
+statically-typed languages a chance to pick the type out in advance
+helps with efficiency. Static languages can just ignore than field
+if they like.
 
 Everything else is left up to the next layer. Protocols that are rigid
 about message order are easy. Protocols that need to match requests to
@@ -67,9 +62,16 @@ package sijsop
 
 import (
 	"bufio"
-	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
+	"strconv"
+)
+
+const (
+	DefaultSizeLimit = 2 << 30
 )
 
 // A Definition defines a specific protocol, with specific messages.
@@ -139,10 +141,16 @@ type Reader struct {
 //
 // If the io.Writer implements io.Closer, it will be closed when this
 // object is closed.
+//
+// SizeLimit can be set after construction to set a limit on how big a
+// message may be on the way out. If -1, there is no limit. If 0, the
+// default of DefaultSizeLimit is used, of a gigabyte. If a number,
+// anything that size or greater will instead error out.
 type Writer struct {
-	def    *Definition
-	out    io.Writer
-	closed bool
+	SizeLimit int
+	def       *Definition
+	out       io.Writer
+	closed    bool
 }
 
 // A Handler composes a Reader and a Writer into a single object.
@@ -168,9 +176,6 @@ type Message interface {
 	New() Message
 }
 
-// allows for this to be changed during testing
-var threshold = 2 << 30
-
 // Send sends the given JSON message. If multiple messages
 // are sent, they will be efficiently concatenated together with a buffer.
 //
@@ -184,29 +189,45 @@ func (w *Writer) Send(msgs ...Message) error {
 	for _, msg := range msgs {
 		ty := msg.SijsopType()
 
-		l := len(ty)
-		// by construction, we checked the length at registration time.
-		// if it doesn't match, well, the user should have returned a
-		// constant string like they were supposed to.
+		l := strconv.Itoa(len(ty))
 
 		// These are fairly unlikely to error, because they will generally
 		// be eaten by the buffer. There's a slight chance they'll fall
 		// across a boundary, but we'll still get the error at the ending
 		// write, just a bit less efficiently.
-		_, _ = buf.Write([]byte{byte(l)})
+		_, _ = buf.Write([]byte(l))
+		_, _ = buf.Write([]byte{10})
 		_, _ = buf.Write([]byte(ty))
+		_, _ = buf.Write([]byte{10})
 
 		json, err := json.Marshal(msg)
 		if err != nil {
 			return err
 		}
-		l = len(json)
 
-		if l >= threshold {
-			return ErrJSONTooLarge{l}
+		jsonLen := len(json)
+
+		switch {
+		case w.SizeLimit == 0:
+			if jsonLen >= DefaultSizeLimit {
+				return ErrJSONTooLarge{jsonLen, DefaultSizeLimit}
+			}
+		case w.SizeLimit > 0:
+			if jsonLen >= w.SizeLimit {
+				return ErrJSONTooLarge{jsonLen, w.SizeLimit}
+			}
+		default:
+			// deliberately do nothing
 		}
-		_ = binary.Write(buf, binary.BigEndian, uint32(l))
+
+		_, _ = buf.Write([]byte(strconv.Itoa(jsonLen)))
+		_, _ = buf.Write([]byte{10})
 		_, err = buf.Write(json)
+		// this is the first place we might realistically encounter an error
+		if err != nil {
+			return err
+		}
+		_, err = buf.Write([]byte{10})
 		if err != nil {
 			return err
 		}
@@ -284,8 +305,7 @@ func (r *Reader) receiveNext(target Message) (Message, error) {
 		return nil, ErrClosed
 	}
 
-	var length byte
-	err := binary.Read(r.in, binary.BigEndian, &length)
+	length, err := getAsciiNum(r.in)
 	if err != nil {
 		return nil, err
 	}
@@ -296,9 +316,11 @@ func (r *Reader) receiveNext(target Message) (Message, error) {
 		return nil, err
 	}
 	ty := string(buf)
+	// eat the newline after the type
+	newlineBuf := make([]byte, 1)
+	_, _ = io.ReadFull(r.in, newlineBuf)
 
-	var jsonLen uint32
-	err = binary.Read(r.in, binary.BigEndian, &jsonLen)
+	jsonLen, err := getAsciiNum(r.in)
 	if err != nil {
 		return nil, err
 	}
@@ -316,10 +338,6 @@ func (r *Reader) receiveNext(target Message) (Message, error) {
 		}
 	}
 
-	// TODO: we depend on having fully consumed the limited reader here. As
-	// long as this implementation is talking to itself, it's guaranteed
-	// not to have trailing whitespace. But this ought to be validated here.
-
 	limitedReader := &io.LimitedReader{R: r.in, N: int64(jsonLen)}
 	decoder := json.NewDecoder(limitedReader)
 
@@ -329,5 +347,49 @@ func (r *Reader) receiveNext(target Message) (Message, error) {
 		return nil, err
 	}
 
+	// if the JSON did not completely fill out the declared space, consume
+	// the remainder without examining it. This ensures that we advance to
+	// the next message properly.
+	_, _ = ioutil.ReadAll(limitedReader)
+	// now eat the newline after the JSON
+	_, err = io.ReadFull(r.in, newlineBuf)
+	if err != nil {
+		// despite the message having been read out, the stream is still skunked
+		return nil, err
+	}
+
 	return target, nil
+}
+
+func getAsciiNum(r io.Reader) (int, error) {
+	accum := []byte{}
+	char := make([]byte, 1)
+	i := 0
+
+	for {
+		i++
+
+		if i > 20 {
+			return 0, errors.New("length claims to be absurdly large")
+		}
+
+		n, err := r.Read(char)
+		if err != nil {
+			return 0, err
+		}
+		if n == 0 {
+			// I'm not sure this is possible
+			return 0, errors.New("unexpected error")
+		}
+
+		if char[0] == 10 {
+			return strconv.Atoi(string(accum))
+		}
+		if char[0] >= '0' && char[0] <= '9' {
+			accum = append(accum, char[0])
+			continue
+		}
+		return 0, fmt.Errorf("unexpected byte in length specification: %d",
+			char[0])
+	}
 }

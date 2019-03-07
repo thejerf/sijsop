@@ -23,6 +23,10 @@ signed.)
 Changlog
 --------
 
+2. 1.0.0
+  * [Per ESR](http://esr.ibiblio.org/?p=8254#comment-2202065), this changes
+    the protocol to pure text. This is API compatible with 0.9.0, but
+    protocol incompatible.
 1. 0.9.0
   * This was pulled from some production code and then modified to be
     suitable for public release. The modifications haven't been tested. I
