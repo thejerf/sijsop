@@ -23,6 +23,10 @@ signed.)
 Changlog
 --------
 
+1. 1.0.2
+  * Add the ability to set the indent on the JSON marshaling process, for
+    debugging purposes. (You can set the indent up to make the messages on
+    the wire more readable for debugging.)
 1. 1.0.1
   * Finish removing the restrictions around a 255-char limit on types.
     I mean, in my opinion you shouldn't have types that long, but there's

@@ -62,6 +62,7 @@ package sijsop
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -135,11 +136,18 @@ type Reader struct {
 // message may be on the way out. If -1, there is no limit. If 0, the
 // default of DefaultSizeLimit is used, of a gigabyte. If a number,
 // anything that size or greater will instead error out.
+//
+// Prefix and Indent will be passed to SetIndent on the encoder if either
+// is non-empty. This can be convenient during debugging to make the
+// messages more readable.
 type Writer struct {
 	SizeLimit int
 	def       *Definition
 	out       io.Writer
 	closed    bool
+
+	Prefix string
+	Indent string
 }
 
 // A Handler composes a Reader and a Writer into a single object.
@@ -193,12 +201,18 @@ func (w *Writer) Send(msgs ...Message) error {
 		_, _ = buf.Write([]byte(ty))
 		_, _ = buf.Write([]byte{10})
 
-		json, err := json.Marshal(msg)
+		jsonBuf := &bytes.Buffer{}
+		encoder := json.NewEncoder(jsonBuf)
+		if w.Prefix != "" || w.Indent != "" {
+			encoder.SetIndent(w.Prefix, w.Indent)
+		}
+		err := encoder.Encode(msg)
 		if err != nil {
 			return err
 		}
 
-		jsonLen := len(json)
+		json := jsonBuf.Bytes()
+		jsonLen := len(json) - 1
 
 		switch {
 		case w.SizeLimit == 0:
@@ -217,10 +231,6 @@ func (w *Writer) Send(msgs ...Message) error {
 		_, _ = buf.Write([]byte{10})
 		_, err = buf.Write(json)
 		// this is the first place we might realistically encounter an error
-		if err != nil {
-			return err
-		}
-		_, err = buf.Write([]byte{10})
 		if err != nil {
 			return err
 		}
