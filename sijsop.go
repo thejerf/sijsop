@@ -50,7 +50,7 @@ Commentary: I've often used variants of this protocol that used just the
 JSON portion, but I found myself repeatedly having to parse the JSON
 once for the type, and then again with the right type. Giving
 statically-typed languages a chance to pick the type out in advance
-helps with efficiency. Static languages can just ignore than field
+helps with efficiency. Dynamic languages can just ignore that field
 if they like.
 
 Everything else is left up to the next layer. Protocols that are rigid
