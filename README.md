@@ -8,6 +8,8 @@ good bang-for-the-buck, as well as being very easy to implement in other
 languages. See
 [the godoc for more information](http://godoc.org/github.com/thejerf/sijsop).
 
+sijsop requires at least Go 1.7.
+
 Code Signing
 ------------
 
