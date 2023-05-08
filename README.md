@@ -10,6 +10,33 @@ languages. See
 
 sijsop requires at least Go 1.7.
 
+Repository Status
+-----------------
+
+This (or a slightly different predecessor) is used for production code for
+a non-trivial system. It is used for the control plane of a system that 
+pushes a lot of data through, but doesn't push a lot of these messages
+through.
+
+This is actually perfectly suitable for systems where you're not pushing
+so many messages through that you care about JSON serialization overhead.
+This actually covers a lot of use cases nowadays; see also the number of
+REST systems out in the world serializing JSON. If you wouldn't blink at
+a REST system serializing JSON at the same rate you send network messages
+with this library, it'll perform fine.
+
+This also has the advantage that it has been through a few revisions
+across a few languages; in particular, sending the type of a message
+separately is something quite nice for an otherwise JSON-based system.
+
+However, perhaps the even greater utility of this repository is that it
+provides a very clean example of building a non-trivial, but also not
+super-complicated, network protocol on top of a socket. Debugging through
+the provided example is a great way to see how to do that in Go.
+
+That it is also useful and something you can ship with if you want to is
+a nice bonus.
+
 Code Signing
 ------------
 
