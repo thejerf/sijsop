@@ -1,8 +1,6 @@
 sijsop - SImple JSOn Protocol
 =============================
 
-[![Build Status](https://travis-ci.org/thejerf/sijsop.png?branch=master)](https://travis-ci.org/thejerf/sijsop)
-
 sijsop provides a JSON-based wire or file protocol that provides extremely
 good bang-for-the-buck, as well as being very easy to implement in other
 languages. See
